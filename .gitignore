@@ -1,15 +1,12 @@
-
 # Dependencies
 node_modules/
 .pnp
 .pnp.js
 
-# Environment Variables (CRITICAL for OWASP ASVS security)
+# Environment variables (CRITICAL: Never commit Supabase credentials!)
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 
 # Build outputs
 dist/
@@ -17,18 +14,14 @@ build/
 .next/
 out/
 
-# Logs
-logs/
-*.log
+# Logs & OS files
 npm-debug.log*
-
-# OS & Editor files
+yarn-debug.log*
+yarn-error.log*
 .DS_Store
-.vscode/
-.idea/
+*.pem
 
-# Testing & Coverage
-coverage/
-playwright-report/
-test-results/
-EOF
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
