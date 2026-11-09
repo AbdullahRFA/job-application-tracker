@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 // Security & parsing middlewares
 app.use(helmet());
@@ -18,7 +18,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Health-check endpoint 
+// Health-check endpoint (Versioned API per Section 6 & NFR-15)
 app.get('/api/v1/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
