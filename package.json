@@ -1,0 +1,14 @@
+{
+  "name": "job-application-tracker-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"emerald,cyan\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "seed": "npm --prefix backend prisma db seed"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
