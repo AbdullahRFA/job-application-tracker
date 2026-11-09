@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Section 2.2 & FR-AUTH-06: At least three roles: User, Admin, Super Admin
+enum RoleName {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Section 5.1: User account status
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// Section 1.4: User-defined priority level of a target company
+enum CompanyTier {
+  TIER_1
+  TIER_2
+  TIER_3
+}
+
+// Section 1.4: Defined application status stages
+enum ApplicationStatus {
+  APPLIED
+  IN_PROGRESS
+  INTERVIEW_SCHEDULED
+  OFFER_RECEIVED
+  REJECTED
+  WITHDRAWN
+}
+
+// Section 5.1: Role & Permission (Many-to-Many for fine-grained RBAC - FR-ADM-07)
+model Role {
+  id          String       @id @default(uuid())
+  name        RoleName     @unique
+  description String?
+  permissions Permission[] @relation("RolePermissions")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g., "users:suspend", "roles:assign", "logs:export"
+  description String?
+  roles       Role[]   @relation("RolePermissions")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("permissions")
+}
+
+// Section 5.1 & Section 3.1: Core User Entity + Security Constraints
+model User {
+  id                  String       @id @default(uuid())
+  name                String
+  email               String       @unique
+  passwordHash        String       @map("password_hash")
+  role                RoleName     @default(USER)
+  status              UserStatus   @default(ACTIVE)
+  isEmailVerified     Boolean      @default(false) @map("is_email_verified") // FR-AUTH-02
+  failedLoginAttempts Int          @default(0) @map("failed_login_attempts") // FR-AUTH-07
+  lockedUntil         DateTime?    @map("locked_until")                      // FR-AUTH-07
+  emailRemindersOptIn Boolean      @default(false) @map("email_reminders_opt_in") // FR-NOT-02
+  aiOptIn             Boolean      @default(false) @map("ai_opt_in")         // FR-RAG-03 (Phase 2 readiness)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+  lastLoginAt         DateTime?    @map("last_login_at")
+  deletedAt           DateTime?    @map("deleted_at")                        // Section 5.2: 30-day retention soft delete
+
+  // Relations
+  applications Application[]
+  activityLogs ActivityLog[]
+  auditActions AuditLog[]    @relation("AdminAuditActions")
+
+  @@index([email])
+  @@index([role, status])
+  @@map("users")
+}
+
+// Section 5.1 & Section 3.2: Job Application Entity
+model Application {
+  id          String            @id @default(uuid())
+  userId      String            @map("user_id")
+  companyName String            @map("company_name")
+  tier        CompanyTier       @default(TIER_2)
+  jobRole     String            @map("job_role")
+  deadline    DateTime
+  status      ApplicationStatus @default(APPLIED)
+  jobPostLink String?           @map("job_post_link")
+  hrContact   String?           @map("hr_contact")
+  feedback    String?           @db.Text // Section 3.5 Note: Private notes/feedback protected from Admin view
+  action      String?           @db.Text
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at") // FR-APP-06: "Last Modified" timestamp
+
+  // Relations (Section 1.4: Each application belongs to exactly one user)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, deadline])
+  @@index([companyName])
+  @@map("applications")
+}
+
+// Section 5.1 & FR-ADM-03: User Activity Log (logins, application CRUD, status changes)
+model ActivityLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  actionType String   @map("action_type") // e.g., "LOGIN", "APP_CREATE", "APP_STATUS_CHANGE"
+  entity     String                       // e.g., "Application", "Auth"
+  ipAddress  String?  @map("ip_address")
+  metadata   Json?                        // Stores non-private context (excludes private feedback per Section 3.5 Note)
+  timestamp  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+  @@index([actionType])
+  @@map("activity_logs")
+}
+
+// Section 5.1 & FR-ADM-05 / NFR-13: System-wide Audit Log of Administrative Actions
+model AuditLog {
+  id        String   @id @default(uuid())
+  adminId   String?  @map("admin_id") // Nullable with SetNull so logs persist even if an account is purged (Section 5.2)
+  action    String                    // e.g., "SUSPEND_USER", "ACTIVATE_USER", "ASSIGN_ROLE"
+  targetId  String   @map("target_id")
+  details   Json?
+  timestamp DateTime @default(now())
+
+  admin User? @relation("AdminAuditActions", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, timestamp])
+  @@index([targetId])
+  @@map("audit_logs")
+}
